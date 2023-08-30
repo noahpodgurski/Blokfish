@@ -9,6 +9,7 @@ import asyncio
 from render import Render
 import random
 import copy
+import time
 import numpy as np
 
 printing = False
@@ -126,5 +127,15 @@ if __name__ == "__main__":
 	# print(game.board)
 	# game.rotateBoard()
 	# print(game.board)
-	Render(game, game.playGame)
+
+	# Render(game, game.playGame)
+
+	t = time.time()
+
+	piece = game.players[0].pieces[10]
+	for i in range(1000000):
+		index = i % piece.maxRotations
+		piece.rotate(piece.rotationTileArray[index], index)
+
+	print(f"Took {time.time()-t} seconds")
 

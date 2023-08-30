@@ -24,10 +24,8 @@ def findOffsets(w, h, corners):
 	return offsets
 
 class Piece:
-	def __init__(self, w, h, color, tileArray, _id=None):
+	def __init__(self, w, h, color, tileArray, isUselessToFlip=False, maxRotations=4):
 		self.id = id()
-		if _id:
-			self.id = _id
 		self.w = w
 		self.h = h
 		self.tileArray = np.array(tileArray) # [[0, 0], [0, 1]] ##
@@ -35,20 +33,53 @@ class Piece:
 		self.coords = None
 		self.placed = False
 		self.placedRotationIndex = None
+		self.isUselessToFlip = isUselessToFlip
+		self.maxRotations = maxRotations
+		self.isUselessToRotate = maxRotations == 1
+
+		# get # of tiles
+		self.numTiles = 0
+		for y in range(self.h):
+			for x in range(self.w):
+				if self.tileArray[y][x] == self.color:
+					self.numTiles += 1
 		
 		self.rotationTileArray = [copy.deepcopy(self.tileArray)]
 		self.rotationDims:list[Dims] = [Dims(self.w, self.h)]
 		# self.rotationOffsets = [findOffsets(self.w, self.h, self.getCorners(0))]
 		
 		#add all rotation possibilities to arrays
-		for _ in range(3):
-			self.rotationDims.append(Dims(self.rotationDims[-1].h, self.rotationDims[-1].w))
-			tmp = self.h
-			self.h = self.w
-			self.w = tmp
-			tileArray = copy.deepcopy(self.rotationTileArray[-1])
-			tileArray = self.rotate(tileArray)
+		if not self.isUselessToRotate:
+			for i in range(self.maxRotations-1):
+				# print('adding???')
+				# print('here')
+				# print(self)
+				# print(self.isUselessToRotate)
+				tmp = self.h
+				self.h = self.w
+				self.w = tmp
+				tileArray = copy.deepcopy(self.rotationTileArray[-1])
+				tileArray = self.rotate(tileArray, i)
+				self.rotationDims.append(Dims(self.rotationDims[-1].h, self.rotationDims[-1].w))
+				self.rotationTileArray.append(tileArray)
+		
+
+		if not self.isUselessToFlip:
+			tileArray = copy.deepcopy(self.rotationTileArray[0])
+			self.rotationDims.append(copy.deepcopy(self.rotationDims[0]))
+			tileArray = self.flip(tileArray, 0)
 			self.rotationTileArray.append(tileArray)
+			for i in range(self.maxRotations-1):
+				#flipped
+				tmp = self.h
+				self.h = self.w
+				self.w = tmp
+				tileArray = copy.deepcopy(self.rotationTileArray[-1])
+				tileArray = self.rotate(tileArray, i+self.maxRotations)
+				self.rotationDims.append(Dims(self.rotationDims[-1].h, self.rotationDims[-1].w))
+				self.rotationTileArray.append(tileArray)
+
+			
 			
 			# find offsets
 			# self.rotationOffsets.append(findOffsets(self.rotationDims[-1].w, self.rotationDims[-1].h, self.getCorners(i+1)))
@@ -57,41 +88,29 @@ class Piece:
 		# self.rotationTile
 
 
-	def rotate(self, tileArray):
+	def rotate(self, tileArray, rotationIndex):
 		#transpose
 		tileArray = np.transpose(tileArray)
 		
 		#reverse columns
-		for x in range(self.w):
-			for y in range(self.h):
-				if y >= self.h / 2:
+		selfW = self.rotationDims[rotationIndex].h
+		selfH = self.rotationDims[rotationIndex].w
+		for x in range(selfW):
+			for y in range(selfH):
+				if y >= selfH / 2:
 					break
-				# print(f"swapping {tileArray[y][x]} with {tileArray[self.h-1-y][x]}")
-				# print(f"{self.h-1-y}")
+				# print(f"swapping {tileArray[y][x]} with {tileArray[selfH-1-y][x]}")
+				# print(f"{selfH-1-y}")
 				tmp = tileArray[y][x]
-				tileArray[y][x] = tileArray[self.h-1-y][x]
-				tileArray[self.h-1-y][x] = tmp
+				tileArray[y][x] = tileArray[selfH-1-y][x]
+				tileArray[selfH-1-y][x] = tmp
 		return tileArray
 
-	def getRotations(self):
-		rotations = [self]
-		for _ in range(3):
-			rotation = copy.deepcopy(rotations[-1])
-			rotation.rotate()
-			rotations.append(rotation)
-		self.flip()
-		flipped = copy.deepcopy(self)
-		rotations.append(flipped)
-		for _ in range(3):
-			rotation = copy.deepcopy(rotations[-1])
-			rotation.rotate()
-			rotations.append(rotation)
-		return rotations
-
 	# ???
-	def flip(self):
-		for y in range(self.h):
-			self.tileArray[y] = self.tileArray[y][::-1]
+	def flip(self, tileArray, rotationIndex):
+		for y in range(self.rotationDims[rotationIndex].h):
+			tileArray[y] = tileArray[y][::-1]
+		return tileArray
 
 	def getCorners(self, rotationIndex):
 		# [-1, -1] (top left)

@@ -1,4 +1,5 @@
 from BlokusSim import Blokus
+from render import render
 import random
 import os
 import time
@@ -21,6 +22,7 @@ def cleanInput(tiles):
 
 gen = 0
 def eval_genomes(genomes, config):
+	playerIndex = 1
 	"""
 	runs the simulation of the current population of
 	birds and sets their fitness based on the distance they
@@ -34,17 +36,23 @@ def eval_genomes(genomes, config):
 	# bird object that uses that network to play
 	nets = []
 	ge = []
-
-
-	game = Blokus()
+	
 	for genome_id, genome in genomes:
 		genome.fitness = 0  # start with fitness level of 0
 		net = neat.nn.FeedForwardNetwork.create(genome, config)
 		nets.append(net)
 		ge.append(genome)
 
+	game = Blokus()
+
+	initRotate = False
 	while not game.board.gameOver:
 		for i, player in enumerate(game.players):
+			# dont rotate board on first players turn, but every turn after that
+			if not initRotate:
+				initRotate = True
+			else:
+				game.rotateBoard()
 			# log(player)
 
 			legalMoves = player.getLegalMoves()
@@ -57,27 +65,48 @@ def eval_genomes(genomes, config):
 			moves = game.moves
 			# log(len(legalMoves))
 			if moves[i] == 0:
-				ge[i].fitness -= .05
+				# if i == playerIndex:
+				# 	ge[i].fitness -= .05
 				game.Pass(i)
 				continue
 
 			#pass legal moves into output
-			output = nets[i].activate([i, moves[i]] + cleanInput(game.board.tiles))
+			if i == playerIndex:
+				output = nets[i].activate([moves[i]] + cleanInput(game.board.tiles))
+			else:
+				output = [random.random()]
 			
 			log(output)
 			log(f"${player} play {int(output[0] * moves[i])} out of {moves[i]}")
 			game.playMove(i, legalMoves[int(output[0] * moves[i]-1)])
-				
-	
+			
+
 	winner = game.getWinner()
+	isTie = game.isTie()
+	remaining = []
 	for i, player in enumerate(game.players):
-		if winner.id == player.id:
+		x = player.getRemainingSquares()
+		remaining.append(x)
+		if isTie:
 			ge[i].fitness += 1
-			pickle.dump(nets[0],open("best.pickle", "wb"))
-			# if player.getRemainingSquares() < 9:
-			# 	game.render()
-		else:
-			ge[i].fitness -= 1
+		elif winner.id == player.id and i == playerIndex:
+			ge[i].fitness += 10
+		ge[i].fitness -= x
+
+		if player.getRemainingSquares() < 2:
+			pickle.dump(nets[i],open("best.pickle", "wb"))
+			render(game)
+			
+
+	for i, player in enumerate(game.players):
+		for j, r in enumerate(remaining):
+			# if i != j:
+			if r > 0:
+				ge[i].fitness -= r // 4
+	
+	# render(game)
+	print(game.players)
+	print(f"remaining: {[x for x in remaining]}")
 	print(f"Fitness: {[x.fitness for x in ge]}")
 	return #end and it will be restarted automatically?
 	
@@ -215,10 +244,11 @@ def testNet(net, NUM_GAMES=100):
 		winner = game.getWinner()
 		for i, player in enumerate(game.players):
 			if winner.id == player.id:
-				if player.getRemainingSquares() < 9:
-					game.render()
+				if player.getRemainingSquares() < 3:
+					render(game)
+					break
 		game.reset()
-	print(game.wins)
+	# print(game.wins)
 
 def run(config_file):
 	"""
@@ -231,27 +261,25 @@ def run(config_file):
 						 config_file)
 
 	# Create the population, which is the top-level object for a NEAT run.
+	#create new
 	p = neat.Population(config)
+
+	#load
+	p = neat.Checkpointer.restore_checkpoint('./checkpoints/neat-checkpoint-4181')
 
 	# Add a stdout reporter to show progress in the terminal.
 	p.add_reporter(neat.StdOutReporter(True))
 	stats = neat.StatisticsReporter()
 	p.add_reporter(stats)
-	#p.add_reporter(neat.Checkpointer(5))
+	p.add_reporter(neat.Checkpointer(50))
 
 	# Run for up to 50 generations.
 	# winner = p.run(eval_multiple_genomes, 50)
-	winner = p.run(eval_genomes, 100)
+	winner = p.run(eval_genomes, 100000)
 
 	# show final stats
 	print('\nBest genome:\n{!s}'.format(winner))
 
-
-# TODO - determine if training should always be from the perspective of P1 and count fitness as P1 win/loss
-# OR by tracking fitness for all ???
-# the more i think about it, the more tracking fitness for all doesnt really make sense??
-
-# also - refactor into 1.pickle, 2.pickle etc...
 if __name__ == '__main__':
 	local_dir = os.path.dirname(__file__)
 	config_path = os.path.join(local_dir, 'config-feedforward.txt')
