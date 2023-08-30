@@ -1,2 +1,2 @@
-# BlackjackAI
-Train AI to play Blackjack
+# Blokfish
+Blokus Engine
